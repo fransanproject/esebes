@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="es" data-theme="auto">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ESEBÉS — Buscador de cuadros eléctricos</title>
+  <meta name="description" content="Buscador offline de cuadros eléctricos, térmicos y equipos de planta. Instalable en el móvil." />
+  <meta name="theme-color" content="#0d1930" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ESEBÉS" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <!-- ============ TAB: BUSCAR ============ -->
+    <section id="tab-search" class="tab active" aria-label="Buscar">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-bolt" aria-hidden="true">⚡</span>
+          <div>
+            <h1>ESEBÉS</h1>
+            <p class="brand-sub"><span id="dataInfo">—</span></p>
+          </div>
+        </div>
+        <span id="offlineBadge" class="offline-badge" hidden>Sin conexión</span>
+      </header>
+
+      <div class="searchbar-wrap">
+        <div class="searchbar">
+          <span class="search-ico" aria-hidden="true">🔍</span>
+          <input id="searchInput" type="search" inputmode="search" autocomplete="off"
+                 placeholder="Buscar equipo, tag, cuadro… (ej. BB18)" aria-label="Buscar" />
+          <button id="clearBtn" class="clear-btn" aria-label="Borrar búsqueda" hidden>✕</button>
+        </div>
+      </div>
+
+      <div id="installBanner" class="install-banner" hidden>
+        <div class="install-txt">
+          <strong>Instala ESEBÉS</strong>
+          <span>Añádela a tu pantalla de inicio y úsala sin internet.</span>
+        </div>
+        <button id="installBtn" class="btn btn-amber btn-sm">Instalar</button>
+        <button id="installDismiss" class="icon-btn" aria-label="Descartar">✕</button>
+      </div>
+
+      <nav id="zoneChips" class="chips" aria-label="Filtrar por zona"></nav>
+
+      <div id="recentWrap" class="recent-wrap">
+        <p class="section-label">Búsquedas recientes</p>
+        <div id="recentChips" class="chips chips-soft"></div>
+      </div>
+
+      <p id="resultMeta" class="result-meta" role="status"></p>
+      <div id="results" class="results"></div>
+      <div class="more-wrap"><button id="moreBtn" class="btn btn-ghost" hidden>Mostrar más resultados</button></div>
+    </section>
+
+    <!-- ============ TAB: FAVORITOS ============ -->
+    <section id="tab-favs" class="tab" aria-label="Favoritos" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-bolt" aria-hidden="true">⭐</span>
+          <div><h1>Favoritos</h1><p class="brand-sub">Equipos que marcas con la estrella</p></div>
+        </div>
+      </header>
+      <div id="favsList" class="results"></div>
+    </section>
+
+    <!-- ============ TAB: AJUSTES ============ -->
+    <section id="tab-settings" class="tab" aria-label="Ajustes" hidden>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-bolt" aria-hidden="true">⚙️</span>
+          <div><h1>Ajustes</h1><p class="brand-sub">Datos, apariencia e instalación</p></div>
+        </div>
+      </header>
+
+      <div class="settings">
+        <div class="card">
+          <h2>📲 Instalar la app</h2>
+          <p class="muted">Funciona sin internet una vez instalada. En iPhone usa «Compartir → Añadir a pantalla de inicio».</p>
+          <button id="installBtn2" class="btn btn-amber" hidden>Instalar ESEBÉS</button>
+          <p id="installHint" class="muted small"></p>
+        </div>
+
+        <div class="card">
+          <h2>🎨 Apariencia</h2>
+          <div class="seg" role="group" aria-label="Tema">
+            <button class="seg-btn" data-theme-opt="auto">Auto</button>
+            <button class="seg-btn" data-theme-opt="light">Claro</button>
+            <button class="seg-btn" data-theme-opt="dark">Oscuro</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>📄 Datos</h2>
+          <p class="muted" id="dataDetail">—</p>
+          <div class="btn-row">
+            <button id="updateBtn" class="btn btn-primary">Actualizar Excel</button>
+            <button id="resetBtn" class="btn btn-ghost">Restablecer</button>
+          </div>
+          <input id="fileInput" type="file" accept=".xls,.xlsx,.xlsm" hidden />
+          <p class="muted small">Puedes cargar una versión nueva del Excel (.xlsm). Se guarda en el móvil y funciona offline.</p>
+        </div>
+
+        <div class="card">
+          <h2>ℹ️ Acerca de</h2>
+          <p class="muted small">ESEBÉS v2 · Buscador de cuadros eléctricos y térmicos de planta.<br>Los datos viven en tu dispositivo; nada se envía a ningún servidor.</p>
+          <p class="foot-credit">Anxopi© Chucoapps©</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- bottom nav -->
+    <nav class="bottomnav" aria-label="Navegación principal">
+      <button class="nav-btn active" data-tab="tab-search"><span class="nav-ico">🔍</span><span>Buscar</span></button>
+      <button class="nav-btn" data-tab="tab-favs"><span class="nav-ico">⭐</span><span>Favoritos</span><span id="favCount" class="nav-badge" hidden></span></button>
+      <button class="nav-btn" data-tab="tab-settings"><span class="nav-ico">⚙️</span><span>Ajustes</span></button>
+    </nav>
+  </div>
+
+  <!-- bottom sheet: detalle -->
+  <div id="sheet" class="sheet-backdrop" hidden>
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Detalle del resultado">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <span id="sheetZone" class="zone-badge"></span>
+        <button id="sheetClose" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div id="sheetBody" class="sheet-body"></div>
+      <div class="sheet-actions">
+        <button id="sheetCopy" class="btn btn-primary">📋 Copiar</button>
+        <button id="sheetFav" class="btn btn-ghost">⭐ Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="app.js" defer></script>
+</body>
+</html>
