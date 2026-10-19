@@ -115,6 +115,7 @@ function cardHTML(res, terms){
   const k = favKey(res.sheet, res.r);
   const isFav = FAVS.some(f=>f.k===k);
   return `<article class="card-result" data-k="${esc(k)}">
+    <div class="card-photo-slot"></div>
     <div class="card-top">
       <span class="zone-badge" style="background:${zoneColor[res.sheet]||'#1d4ed8'}">${esc(res.sheet)}</span>
       <span class="row-num">Fila ${res.r}</span>
@@ -144,6 +145,7 @@ function renderResults(terms){
   }
   box.innerHTML = slice.map(r=>cardHTML(r, terms)).join('');
   $('#moreBtn').hidden = total <= shown;
+  enhancePhotos(box);
 }
 
 function bindCardActions(container){
@@ -215,6 +217,7 @@ function renderFavs(){
     return;
   }
   box.innerHTML = FAVS.map(f=>cardHTML({sheet:f.sheet, r:f.r, c:f.c, best:-1, score:0}, [])).join('');
+  enhancePhotos(box);
 }
 
 /* ---------- recientes ---------- */
@@ -264,6 +267,7 @@ function openSheet(k){
   $('#sheetFav').textContent = isFav ? '★ Guardado' : '⭐ Guardar';
   $('#sheet').hidden = false;
   document.body.style.overflow = 'hidden';
+  refreshPhotoUI(k);
 }
 function closeSheet(){
   $('#sheet').hidden = true;
@@ -384,6 +388,191 @@ function renderDataInfo(){
   $('#dataDetail').textContent = `Fuente: ${DB.source || 'ESEBES.xlsm'} · ${DB.total} filas en ${DB.sheets.length} zonas. Guardados en este dispositivo, disponibles sin internet.`;
 }
 
+/* ---------- voz ---------- */
+function setupVoice(){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  const btn = $('#micBtn');
+  btn.hidden = false;
+  const rec = new SR();
+  rec.lang = 'es-ES';
+  rec.interimResults = false;
+  rec.maxAlternatives = 1;
+  btn.onclick = ()=>{ try{ rec.start(); }catch(e){} };
+  rec.onstart = ()=> btn.classList.add('listening');
+  rec.onend = ()=> btn.classList.remove('listening');
+  rec.onerror = (e)=>{
+    btn.classList.remove('listening');
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed')
+      toast('Permite el micrófono para usar la voz');
+  };
+  rec.onresult = (e)=>{
+    const t = e.results[0][0].transcript || '';
+    if (!t.trim()) return;
+    $('#searchInput').value = t;
+    $('#clearBtn').hidden = false;
+    doSearch();
+    pushRecent(t);
+  };
+}
+
+/* ---------- fotos (IndexedDB, offline) ---------- */
+const idb = {
+  _db: null,
+  open(){
+    if (this._db) return Promise.resolve(this._db);
+    return new Promise((resolve, reject)=>{
+      try{
+        const rq = indexedDB.open('esebes-v1', 1);
+        rq.onupgradeneeded = ()=> rq.result.createObjectStore('photos');
+        rq.onsuccess = ()=>{ this._db = rq.result; resolve(this._db); };
+        rq.onerror = ()=> reject(rq.error);
+      }catch(e){ reject(e); }
+    });
+  },
+  async get(k){
+    try{
+      const db = await this.open();
+      return await new Promise((res)=>{
+        const rq = db.transaction('photos','readonly').objectStore('photos').get(k);
+        rq.onsuccess = ()=> res(rq.result || null);
+        rq.onerror = ()=> res(null);
+      });
+    }catch(e){ return null; }
+  },
+  async set(k, blob){
+    const db = await this.open();
+    return new Promise((res, rej)=>{
+      const tx = db.transaction('photos','readwrite');
+      tx.objectStore('photos').put(blob, k);
+      tx.oncomplete = ()=> res();
+      tx.onerror = ()=> rej(tx.error);
+    });
+  },
+  async del(k){
+    try{
+      const db = await this.open();
+      await new Promise((res)=>{
+        const tx = db.transaction('photos','readwrite');
+        tx.objectStore('photos').delete(k);
+        tx.oncomplete = ()=> res();
+        tx.onerror = ()=> res();
+      });
+    }catch(e){}
+  }
+};
+
+let photoTargetK = null;
+function takePhoto(k){
+  photoTargetK = k;
+  const inp = $('#photoInput');
+  inp.value = '';
+  inp.click();
+}
+function compressImage(file){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = ()=>{
+      URL.revokeObjectURL(url);
+      const max = 900;
+      const sc = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(img.width * sc));
+      c.height = Math.max(1, Math.round(img.height * sc));
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('blob')), 'image/jpeg', 0.72);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+}
+async function refreshPhotoUI(k){
+  const blob = await idb.get(k);
+  const url = blob ? URL.createObjectURL(blob) : null;
+  if (sheetK === k){
+    const wrap = $('#sheetPhotoWrap');
+    if (url){ wrap.hidden = false; $('#sheetPhoto').src = url; }
+    else wrap.hidden = true;
+  }
+  document.querySelectorAll(`.card-result[data-k="${CSS.escape(k)}"] .card-photo-slot`).forEach(slot=>{
+    slot.innerHTML = url ? '<img class="card-photo" alt="Foto del equipo">' : '';
+    if (url) slot.firstChild.src = url;
+  });
+}
+async function enhancePhotos(container){
+  const cards = [...container.querySelectorAll('.card-result')];
+  for (const card of cards){
+    const blob = await idb.get(card.dataset.k);
+    const slot = card.querySelector('.card-photo-slot');
+    if (blob && slot){
+      slot.innerHTML = '<img class="card-photo" alt="Foto del equipo">';
+      slot.firstChild.src = URL.createObjectURL(blob);
+    }
+  }
+}
+
+/* ---------- QR con enlace directo ---------- */
+let qrLoaded = false;
+function ensureQR(){
+  return new Promise((resolve, reject)=>{
+    if (qrLoaded || window.QRCode) return resolve();
+    const s = document.createElement('script');
+    s.src = 'vendor/qrcode.min.js';
+    s.onload = ()=>{ qrLoaded = true; resolve(); };
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+function deepLink(k){
+  return location.origin + location.pathname + '?r=' + encodeURIComponent(k);
+}
+async function openQR(k){
+  const info = resolveK(k);
+  if (!info) return;
+  try{ await ensureQR(); }
+  catch(e){ toast('No se pudo cargar el generador QR'); return; }
+  $('#qrTitle').textContent = 'QR · ' + info.sheet;
+  $('#qrLabel').textContent = info.c.filter(c=>c!=='').slice(0,3).join(' · ');
+  const box = $('#qrCode');
+  box.innerHTML = '';
+  new QRCode(box, {text: deepLink(k), width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M});
+  const dl = $('#qrDownload');
+  dl.removeAttribute('href');
+  dl.download = 'esebes-' + info.sheet.replace(/[^\wáéíóúñü]+/gi,'-') + '-f' + info.r + '.png';
+  let tries = 0;
+  const timer = setInterval(()=>{
+    const img = box.querySelector('img');
+    if (img && img.src){ dl.href = img.src; clearInterval(timer); }
+    else if (++tries > 50) clearInterval(timer);
+  }, 100);
+  $('#qrModal').hidden = false;
+}
+function closeQR(){ $('#qrModal').hidden = true; }
+
+/* ---------- compartir por WhatsApp ---------- */
+async function shareResult(k){
+  const info = resolveK(k);
+  if (!info) return;
+  const text = '⚡ ESEBÉS · ' + info.sheet + ' · Fila ' + info.r + '\n'
+    + info.c.filter(c=>c!=='').join(' | ');
+  if (navigator.share){
+    try{ await navigator.share({title: 'ESEBÉS', text}); return; }
+    catch(e){ if (e && e.name === 'AbortError') return; }
+  }
+  window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank', 'noopener');
+}
+
+/* ---------- enlace directo ?r= ---------- */
+function handleDeepLink(){
+  const p = new URLSearchParams(location.search);
+  const r = p.get('r');
+  if (r && rowByKey(r)){
+    openSheet(r);
+    history.replaceState(null, '', location.pathname);
+  }
+}
+
 /* ---------- init ---------- */
 async function init(){
   FAVS = loadJSON(FAV_KEY, []);
@@ -397,6 +586,7 @@ async function init(){
     updateFavBadge();
     renderDataInfo();
     $('#dataInfo').textContent += src === 'actualizados' ? ' · datos actualizados' : '';
+    handleDeepLink();
   }catch(e){
     console.error(e);
     $('#results').innerHTML = `<div class="empty"><span class="big">⚠️</span>No se pudieron cargar los datos.</div>`;
@@ -440,9 +630,34 @@ async function init(){
   // sheet
   $('#sheetClose').onclick = closeSheet;
   $('#sheet').addEventListener('click', (e)=>{ if (e.target.id === 'sheet') closeSheet(); });
-  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape') closeSheet(); });
+  document.addEventListener('keydown', (e)=>{ if (e.key === 'Escape'){ closeSheet(); closeQR(); } });
   $('#sheetCopy').onclick = ()=>copyResult(sheetK);
   $('#sheetFav').onclick = ()=>{ toggleFav(sheetK); openSheet(sheetK); };
+  $('#sheetShare').onclick = ()=>shareResult(sheetK);
+  $('#sheetPhotoBtn').onclick = ()=>takePhoto(sheetK);
+  $('#sheetPhotoDel').onclick = async ()=>{ await idb.del(sheetK); toast('Foto eliminada'); refreshPhotoUI(sheetK); };
+  $('#sheetQr').onclick = ()=>openQR(sheetK);
+
+  // modal QR
+  $('#qrClose').onclick = closeQR;
+  $('#qrModal').addEventListener('click', (e)=>{ if (e.target.id === 'qrModal') closeQR(); });
+
+  // foto (cámara / galería)
+  $('#photoInput').onchange = async (e)=>{
+    const f = e.target.files[0];
+    if (!f || !photoTargetK) return;
+    try{
+      const blob = await compressImage(f);
+      await idb.set(photoTargetK, blob);
+      toast('📷 Foto guardada');
+      refreshPhotoUI(photoTargetK);
+    }catch(err){
+      console.error(err);
+      toast('No se pudo guardar la foto');
+    }
+  };
+
+  setupVoice();
 
   // tema
   applyTheme(loadJSON(THEME_KEY, 'auto'));

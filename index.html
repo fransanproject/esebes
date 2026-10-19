@@ -36,6 +36,7 @@
           <span class="search-ico" aria-hidden="true">🔍</span>
           <input id="searchInput" type="search" inputmode="search" autocomplete="off"
                  placeholder="Buscar equipo, tag, cuadro… (ej. BB18)" aria-label="Buscar" />
+          <button id="micBtn" class="mic-btn" aria-label="Búsqueda por voz" hidden>🎙️</button>
           <button id="clearBtn" class="clear-btn" aria-label="Borrar búsqueda" hidden>✕</button>
         </div>
       </div>
@@ -133,13 +134,43 @@
         <span id="sheetZone" class="zone-badge"></span>
         <button id="sheetClose" class="icon-btn" aria-label="Cerrar">✕</button>
       </div>
+      <div id="sheetPhotoWrap" class="sheet-photo-wrap" hidden>
+        <img id="sheetPhoto" class="sheet-photo" alt="Foto del equipo" />
+        <button id="sheetPhotoDel" class="mini-btn">🗑️ Quitar foto</button>
+      </div>
       <div id="sheetBody" class="sheet-body"></div>
-      <div class="sheet-actions">
-        <button id="sheetCopy" class="btn btn-primary">📋 Copiar</button>
-        <button id="sheetFav" class="btn btn-ghost">⭐ Guardar</button>
+      <div class="sheet-actions sheet-actions-grid">
+        <button id="sheetCopy" class="btn btn-ghost">📋 Copiar</button>
+        <button id="sheetShare" class="btn btn-ghost">💬 WhatsApp</button>
+        <button id="sheetPhotoBtn" class="btn btn-ghost">📷 Foto</button>
+        <button id="sheetQr" class="btn btn-ghost">🔳 QR</button>
+      </div>
+      <div class="sheet-actions" style="margin-top:10px">
+        <button id="sheetFav" class="btn btn-primary">⭐ Guardar</button>
       </div>
     </div>
   </div>
+
+  <!-- modal QR -->
+  <div id="qrModal" class="sheet-backdrop" hidden>
+    <div class="sheet qr-sheet" role="dialog" aria-modal="true" aria-label="Código QR de la ficha">
+      <div class="sheet-grip"></div>
+      <div class="sheet-head">
+        <strong id="qrTitle">Código QR</strong>
+        <button id="qrClose" class="icon-btn" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="qr-body">
+        <div id="qrCode" class="qr-code"></div>
+        <p id="qrLabel" class="qr-label"></p>
+        <p class="muted small">Pégalo en el cuadro físico: al escanearlo se abre esta ficha en la app.</p>
+      </div>
+      <div class="sheet-actions">
+        <a id="qrDownload" class="btn btn-primary" download="esebes-qr.png">⬇️ Descargar PNG</a>
+      </div>
+    </div>
+  </div>
+
+  <input id="photoInput" type="file" accept="image/*" capture="environment" hidden />
 
   <div id="toast" class="toast" role="status" hidden></div>
 

@@ -79,6 +79,14 @@ h2{font-size:16px;margin:0 0 8px}
   border:0;background:var(--bg);color:var(--muted);font-size:15px;
   width:40px;height:40px;border-radius:12px;cursor:pointer;flex:0 0 40px;
 }
+.mic-btn{
+  border:0;cursor:pointer;flex:0 0 46px;width:46px;height:46px;border-radius:50%;
+  background:linear-gradient(145deg,var(--amber),var(--amber-d));font-size:20px;
+  box-shadow:var(--shadow);display:flex;align-items:center;justify-content:center;
+}
+.mic-btn:active{transform:scale(.93)}
+.mic-btn.listening{animation:pulse 1.1s ease infinite}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(251,191,36,.55)}50%{box-shadow:0 0 0 12px rgba(251,191,36,0)}}
 
 /* ---------- install banner ---------- */
 .install-banner{
@@ -212,6 +220,22 @@ html[data-theme="dark"] mark{background:#a16207;color:#fff}
 .field .fl{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:3px}
 .sheet-actions{display:flex;gap:10px}
 .sheet-actions .btn{flex:1}
+.sheet-actions-grid{display:grid;grid-template-columns:1fr 1fr}
+.sheet-actions-grid .btn{min-height:52px;font-size:14.5px;padding:12px 8px}
+.sheet-photo-wrap{margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.sheet-photo{width:100%;max-height:260px;object-fit:cover;border-radius:14px;box-shadow:var(--shadow)}
+.qr-sheet{max-height:none}
+.qr-body{display:flex;flex-direction:column;align-items:center;gap:10px;margin-bottom:14px;text-align:center}
+.qr-code{background:#fff;padding:14px;border-radius:16px;box-shadow:var(--shadow)}
+.qr-code img,.qr-code canvas{display:block;width:220px!important;height:220px!important}
+.qr-label{font-weight:700;font-size:14.5px;margin:0;overflow-wrap:anywhere}
+.card-photo{
+  width:100%;height:120px;object-fit:cover;border-radius:12px;margin-bottom:8px;display:block;
+}
+.photo-badge{
+  display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:700;
+  background:var(--accent-soft);color:var(--accent);border-radius:999px;padding:4px 10px;
+}
 @keyframes slideUp{from{transform:translateY(40px);opacity:.6}to{transform:none;opacity:1}}
 @keyframes fadeIn{from{opacity:0}to{opacity:1}}
 
