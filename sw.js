@@ -1,5 +1,5 @@
 /* ESEBÉS v2 — service worker offline */
-const CACHE = 'esebes-v3'; // subir versión en cada despliegue con cambios de assets
+const CACHE = 'esebes-v4'; // subir versión en cada despliegue con cambios de assets
 const ASSETS = [
   './',
   './index.html',
@@ -30,6 +30,20 @@ self.addEventListener('activate', (e)=>{
 self.addEventListener('fetch', (e)=>{
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // los datos siempre intentan la red primero: así las actualizaciones del Excel
+  // llegan solas sin tener que subir la versión de caché
+  if (url.pathname.endsWith('/data/esebes.json')){
+    e.respondWith(
+      fetch(e.request).then(res=>{
+        if (res.ok){
+          const copy = res.clone();
+          caches.open(CACHE).then(c=>c.put(e.request, copy));
+        }
+        return res;
+      }).catch(()=>caches.match(e.request).then(hit=>hit || caches.match('./data/esebes.json')))
+    );
+    return;
+  }
   e.respondWith(
     caches.match(e.request, {ignoreSearch:false}).then(hit=>{
       if (hit) return hit;
