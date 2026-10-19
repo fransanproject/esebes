@@ -1,5 +1,5 @@
 /* ESEBÉS v2 — service worker offline */
-const CACHE = 'esebes-v4'; // subir versión en cada despliegue con cambios de assets
+const CACHE = 'esebes-v5'; // subir versión en cada despliegue con cambios de assets
 const ASSETS = [
   './',
   './index.html',

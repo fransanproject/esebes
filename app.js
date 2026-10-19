@@ -76,17 +76,10 @@ function rowByKey(k){
 }
 
 /* ---------- búsqueda ---------- */
-function doSearch(){
-  const q = $('#searchInput').value.trim();
-  const terms = norm(q).split(/\s+/).filter(Boolean);
-  lastResults = []; shown = PAGE;
-  $('#recentWrap').style.display = terms.length ? 'none' : '';
-  if (!terms.length){
-    $('#results').innerHTML = '';
-    $('#resultMeta').textContent = '';
-    $('#moreBtn').hidden = true;
-    return;
-  }
+function searchRows(query){
+  const terms = norm(query).split(/\s+/).filter(Boolean);
+  const results = [];
+  if (!terms.length) return {terms, results};
   for (const sh of DB.sheets){
     if (activeSheet !== '__all' && sh.name !== activeSheet) continue;
     for (const row of sh.rows){
@@ -96,15 +89,67 @@ function doSearch(){
       row.c.forEach((cell, ci)=>{
         const nc = norm(cell);
         if (terms.every(t => nc.includes(t))){
-          const s = 1000 / (cell.length + 8) + (nc === norm(q) ? 500 : 0);
+          const s = 1000 / (cell.length + 8) + (nc === norm(query) ? 500 : 0);
           if (s > score){ score = s; best = ci; }
         }
       });
-      lastResults.push({sheet: sh.name, r: row.r, c: row.c, best, score});
+      results.push({sheet: sh.name, r: row.r, c: row.c, best, score});
     }
   }
-  lastResults.sort((a,b)=>b.score - a.score);
+  results.sort((a,b)=>b.score - a.score);
+  return {terms, results};
+}
+
+function doSearch(){
+  const q = $('#searchInput').value.trim();
+  lastResults = []; shown = PAGE;
+  $('#recentWrap').style.display = q ? 'none' : '';
+  $('#voiceNote').hidden = true;
+  if (!q){
+    $('#results').innerHTML = '';
+    $('#resultMeta').textContent = '';
+    $('#moreBtn').hidden = true;
+    return;
+  }
+  const {terms, results} = searchRows(q);
+  lastResults = results;
   renderResults(terms);
+}
+
+/* Búsqueda por voz: prueba la transcripción tal cual, sin espacios
+   y la versión "traducida" a tag (bebe 18 -> bb18), y mezcla resultados. */
+function voiceSearch(transcript){
+  const t = transcript.trim();
+  if (!t) return;
+  const cands = [t];
+  const nospace = t.replace(/\s+/g, '');
+  if (nospace && nospace !== t) cands.push(nospace);
+  const decoded = voiceDecode(t);
+  if (decoded && !cands.includes(decoded) && !cands.includes(decoded.toLowerCase()))
+    cands.push(decoded);
+  const seen = new Set();
+  const merged = [];
+  let allTerms = [];
+  for (const c of cands){
+    const {terms, results} = searchRows(c);
+    allTerms = allTerms.concat(terms);
+    for (const r of results){
+      const k = favKey(r.sheet, r.r);
+      if (!seen.has(k)){ seen.add(k); merged.push(r); }
+    }
+  }
+  merged.sort((a,b)=>b.score - a.score);
+  lastResults = merged; shown = PAGE;
+  $('#recentWrap').style.display = 'none';
+  renderResults([...new Set(allTerms)]);
+  const note = $('#voiceNote');
+  if (decoded && norm(decoded) !== norm(t)){
+    note.hidden = false;
+    note.innerHTML = `🎙️ He oído «${esc(t)}» → busco «<strong>${esc(decoded)}</strong>»`;
+  } else {
+    note.hidden = true;
+  }
+  pushRecent(t);
 }
 
 function cardHTML(res, terms){
@@ -388,6 +433,77 @@ function renderDataInfo(){
   $('#dataDetail').textContent = `Fuente: ${DB.source || 'ESEBES.xlsm'} · ${DB.total} filas en ${DB.sheets.length} zonas. Guardados en este dispositivo, disponibles sin internet.`;
 }
 
+/* ---------- voz: traductor de tags dictados ---------- */
+/* El reconocedor oye palabras ("bebe 18") cuando se dictan letras ("be be 18").
+   Esto convierte nombres de letras y números en español al formato de los tags. */
+const LETTER_NAMES = {
+  'dobleuve':'w', 'griegai':'y',
+  'be':'b','ce':'c','de':'d','efe':'f','ge':'g','ache':'h','hache':'h',
+  'jota':'j','ka':'k','ele':'l','eme':'m','ene':'n','eñe':'ñ','pe':'p',
+  'cu':'q','erre':'r','ere':'r','ese':'s','te':'t','uve':'v','equis':'x',
+  'ye':'y','zeta':'z','a':'a','e':'e','i':'i','o':'o','u':'u'
+};
+const LETTER_KEYS = Object.keys(LETTER_NAMES).sort((a,b)=>b.length-a.length);
+const NUM_WORDS = {cero:0,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,
+  ocho:8,nueve:9,diez:10,once:11,doce:12,trece:13,catorce:14,quince:15,dieciseis:16,
+  diecisiete:17,dieciocho:18,diecinueve:19,veinte:20,veintiuno:21,veintidos:22,
+  veintitres:23,veinticuatro:24,veinticinco:25,veintiseis:26,veintisiete:27,
+  veintiocho:28,veintinueve:29,treinta:30,cuarenta:40,cincuenta:50,sesenta:60,
+  setenta:70,ochenta:80,noventa:90,cien:100,ciento:100,mil:1000};
+
+/* "bebe" -> "bb" | "bomba" -> null (no es deletreo) */
+function parseLetters(word){
+  let out = '', rest = word;
+  while (rest.length){
+    let hit = null;
+    for (const k of LETTER_KEYS){
+      if (rest.startsWith(k)){ hit = k; break; }
+    }
+    if (!hit) return null;
+    out += LETTER_NAMES[hit];
+    rest = rest.slice(hit.length);
+  }
+  return out;
+}
+
+/* "bebe 18" -> "bb18" | "efe ese ele 340" -> "fsl340" | "bomba 3" -> null */
+function voiceDecode(transcript){
+  let t = norm(transcript)
+    .replace(/uve doble|doble uve/g, 'dobleuve')
+    .replace(/i griega/g, 'griegai');
+  const toks = t.split(/\s+/).filter(Boolean);
+  if (!toks.length) return null;
+  const parts = [];
+  let pendingTen = null;
+  const flushTen = ()=>{ if (pendingTen!==null){ parts.push(String(pendingTen)); pendingTen = null; } };
+  for (let i = 0; i < toks.length; i++){
+    const tok = toks[i];
+    if (tok === 'doble'){ // "doble be" -> "bb"
+      const l = toks[i+1] ? parseLetters(toks[i+1]) : null;
+      if (l && l.length === 1){ flushTen(); parts.push(l + l); i++; continue; }
+      return null;
+    }
+    if (/^\d+$/.test(tok)){ flushTen(); parts.push(tok); continue; }
+    if (tok === 'y') continue;
+    if (NUM_WORDS[tok] !== undefined){
+      const v = NUM_WORDS[tok];
+      if (pendingTen!==null && v < 10 && pendingTen % 10 === 0 && pendingTen >= 20){
+        parts.push(String(pendingTen + v)); pendingTen = null;
+      } else {
+        flushTen();
+        if (v >= 20 && v % 10 === 0) pendingTen = v; else parts.push(String(v));
+      }
+      continue;
+    }
+    const l = parseLetters(tok);
+    if (l === null) return null;
+    flushTen();
+    parts.push(l);
+  }
+  flushTen();
+  return parts.join('');
+}
+
 /* ---------- voz ---------- */
 function setupVoice(){
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -411,8 +527,7 @@ function setupVoice(){
     if (!t.trim()) return;
     $('#searchInput').value = t;
     $('#clearBtn').hidden = false;
-    doSearch();
-    pushRecent(t);
+    voiceSearch(t);
   };
 }
 
